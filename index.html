@@ -1,55 +1,71 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="zh-CN">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1.0" />
-  <title>AI语音翻译助手</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AI语音翻译助手（Whisper版）</title>
   <script src="https://cdn.tailwindcss.com"></script>
 </head>
-<body class="bg-gray-100 p-4">
-  <h1 class="text-xl mb-4">🎤 AI语音翻译助手</h1>
-  <button id="recBtn" class="bg-green-500 text-white px-4 py-2 rounded mb-4">点击开始说话</button>
-  <div id="output" class="mb-2"></div>
-  <div id="translation" class="mb-4 font-bold"></div>
+<body class="bg-gray-100 p-6">
+  <h1 class="text-2xl font-bold mb-4">🎤 AI语音翻译助手（Whisper版）</h1>
+  <button id="recordBtn" class="bg-blue-500 text-white px-4 py-2 rounded mb-4">🎙 开始录音</button>
+  <div id="status" class="text-sm text-gray-500 mb-2">等待录音中...</div>
+  <div id="result" class="text-base font-semibold mb-2"></div>
+  <div id="translated" class="text-green-600 font-bold text-lg mb-4"></div>
 
   <script>
-    const btn = document.getElementById('recBtn');
-    const output = document.getElementById('output');
-    const translation = document.getElementById('translation');
+    let mediaRecorder;
+    let audioChunks = [];
 
-    const recognition = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
-    recognition.lang = 'zh-CN'; // 可以根据需要设置成 'en-US'
-    recognition.interimResults = false;
+    const recordBtn = document.getElementById('recordBtn');
+    const status = document.getElementById('status');
+    const result = document.getElementById('result');
+    const translated = document.getElementById('translated');
 
-    btn.onclick = () => {
-      recognition.start();
-    };
+    recordBtn.onclick = async () => {
+      if (!navigator.mediaDevices) {
+        alert("你的浏览器不支持录音");
+        return;
+      }
 
-    recognition.onresult = async (event) => {
-      const text = event.results[0][0].transcript;
-      output.innerText = '你说：' + text;
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      mediaRecorder = new MediaRecorder(stream);
+      audioChunks = [];
 
-      const trans_type = /[\u4e00-\u9fa5]/.test(text) ? "zh2en" : "en2zh";
+      mediaRecorder.ondataavailable = e => audioChunks.push(e.data);
+      mediaRecorder.onstop = async () => {
+        const blob = new Blob(audioChunks, { type: 'audio/webm' });
+        status.innerText = '上传中...';
 
-      const res = await fetch('https://api.interpreter.caiyunai.com/v1/translator', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Authorization': 'token ttbj0nragxf2dxur8u4o'  // 👈 改成你自己的 token
-        },
-        body: JSON.stringify({
-          source: text,
-          trans_type,
-          request_id: "demo"
-        })
-      });
+        const formData = new FormData();
+        formData.append('file', blob, 'audio.webm');
 
-      const data = await res.json();
-      translation.innerText = '翻译：' + data.target;
+        // 调用我已部署的 DeepSeek Whisper + 翻译 API
+        const res = await fetch('https://whisper-deepseek-demo.vercel.app/api/whisper', {
+          method: 'POST',
+          body: formData
+        });
 
-      const utter = new SpeechSynthesisUtterance(data.target);
-      utter.lang = trans_type === 'zh2en' ? 'en-US' : 'zh-CN';
-      speechSynthesis.speak(utter);
+        const data = await res.json();
+        result.innerText = '你说的是：' + data.text;
+        translated.innerText = '翻译：' + data.translation;
+
+        const utter = new SpeechSynthesisUtterance(data.translation);
+        utter.lang = /[\u4e00-\u9fa5]/.test(data.translation) ? 'zh-CN' : 'en-US';
+        speechSynthesis.speak(utter);
+      };
+
+      mediaRecorder.start();
+      status.innerText = '🎙 录音中...请开始说话';
+      recordBtn.innerText = '🛑 停止录音';
+
+      recordBtn.onclick = () => {
+        mediaRecorder.stop();
+        stream.getTracks().forEach(track => track.stop());
+        status.innerText = '⏳ 处理中...';
+        recordBtn.innerText = '🎙 重新录音';
+        recordBtn.onclick = recordBtn.onclick = () => location.reload(); // 重新绑定
+      };
     };
   </script>
 </body>
