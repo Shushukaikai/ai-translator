@@ -1,80 +1,67 @@
 <!DOCTYPE html>
 <html lang="zh">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>🎙 AI英汉语音翻译</title>
+  <meta charset="UTF-8">
+  <title>🎤 AI语音翻译助手</title>
   <script src="https://cdn.tailwindcss.com"></script>
 </head>
-<body class="bg-gray-100 p-6">
-  <h1 class="text-2xl font-bold mb-4">🎙 AI 英汉翻译（支持 iPad）</h1>
-
-  <button id="recordBtn" class="bg-blue-600 text-white px-4 py-2 rounded mb-4">
-    ⏺️ 开始录音
-  </button>
-
-  <p><strong>原始语音识别：</strong> <span id="speechText" class="text-gray-800">（等待上传）</span></p>
-  <p><strong>翻译结果：</strong> <span id="translatedText" class="text-blue-800 font-bold">（等待识别）</span></p>
+<body class="bg-gray-100 text-gray-900 p-6">
+  <h1 class="text-2xl font-bold mb-4">🎤 AI语音翻译助手</h1>
+  <button id="recordBtn" class="bg-blue-600 text-white px-4 py-2 rounded">🎙 开始说话</button>
+  <p class="mt-4"><strong>识别内容：</strong> <span id="speechText" class="text-blue-800"></span></p>
+  <p class="mt-2"><strong>翻译结果：</strong> <span id="translatedText" class="text-green-800 font-bold"></span></p>
 
   <script>
-    let mediaRecorder, audioChunks = [];
     const recordBtn = document.getElementById("recordBtn");
     const speechText = document.getElementById("speechText");
     const translatedText = document.getElementById("translatedText");
 
-    recordBtn.onclick = async () => {
-      if (mediaRecorder && mediaRecorder.state === "recording") {
-        mediaRecorder.stop();
-        recordBtn.innerText = "⏺️ 开始录音";
-        return;
-      }
+    let mediaRecorder;
+    let chunks = [];
 
+    async function startRecording() {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       mediaRecorder = new MediaRecorder(stream);
-      audioChunks = [];
+      chunks = [];
 
-      mediaRecorder.ondataavailable = e => audioChunks.push(e.data);
+      mediaRecorder.ondataavailable = e => chunks.push(e.data);
       mediaRecorder.onstop = async () => {
-        const blob = new Blob(audioChunks, { type: "audio/webm" });
+        const blob = new Blob(chunks, { type: "audio/webm" });
         const formData = new FormData();
-        formData.append("audio", blob, "recording.webm");
+        formData.append("audio", blob);
 
-        speechText.innerText = "⏳ 正在识别中...";
-        translatedText.innerText = "（等待翻译）";
+        translatedText.innerText = "识别中...";
+        speechText.innerText = "";
 
         try {
-          // 1. 调用测试 Whisper API（无需 Key）
-          const whisperRes = await fetch("https://deepseek-whisper-api.vercel.app/api/whisper", {
+          const res = await fetch("https://ai-translator-proxy.vercel.app/api/whisper_baidu", {
             method: "POST",
             body: formData
           });
-          const whisperData = await whisperRes.json();
-          const originalText = whisperData.text || "(识别失败)";
-          speechText.innerText = originalText;
+          const data = await res.json();
 
-          // 2. 调用 LibreTranslate 翻译
-          const lang = /[\u4e00-\u9fa5]/.test(originalText) ? "en" : "zh";
-          const transRes = await fetch("https://libretranslate.de/translate", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              q: originalText,
-              source: "auto",
-              target: lang,
-              format: "text"
-            })
-          });
-          const transData = await transRes.json();
-          translatedText.innerText = transData.translatedText || "⚠️ 翻译失败";
-
-        } catch (e) {
-          speechText.innerText = "❌ 语音识别失败";
-          translatedText.innerText = "⚠️ 翻译失败";
+          if (data.error) {
+            translatedText.innerText = "⚠️ 出错：" + data.error;
+          } else {
+            speechText.innerText = data.recognizedText;
+            translatedText.innerText = data.translatedText;
+          }
+        } catch (err) {
+          translatedText.innerText = "⚠️ 请求失败";
         }
       };
 
       mediaRecorder.start();
-      recordBtn.innerText = "🛑 停止录音";
+      recordBtn.innerText = "🎙 正在录音（3秒）";
+
+      setTimeout(() => {
+        mediaRecorder.stop();
+        recordBtn.innerText = "🎙 开始说话";
+      }, 3000);
+    }
+
+    recordBtn.onclick = () => {
+      startRecording();
     };
   </script>
 </body>
