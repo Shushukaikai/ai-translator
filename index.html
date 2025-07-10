@@ -33,6 +33,7 @@
       audioChunks = [];
 
       mediaRecorder.ondataavailable = e => audioChunks.push(e.data);
+
       mediaRecorder.onstop = async () => {
         const blob = new Blob(audioChunks, { type: 'audio/webm' });
         status.innerText = '上传中...';
@@ -40,31 +41,38 @@
         const formData = new FormData();
         formData.append('file', blob, 'audio.webm');
 
-        // 调用我已部署的 DeepSeek Whisper + 翻译 API
-        const res = await fetch('https://whisper-deepseek-demo.vercel.app/api/whisper', {
-          method: 'POST',
-          body: formData
-        });
+        try {
+          const res = await fetch('https://whisper-deepseek-demo.vercel.app/api/whisper', {
+            method: 'POST',
+            body: formData
+          });
 
-        const data = await res.json();
-        result.innerText = '你说的是：' + data.text;
-        translated.innerText = '翻译：' + data.translation;
+          const data = await res.json();
+          result.innerText = '你说的是：' + data.text;
+          translated.innerText = '翻译：' + data.translation;
 
-        const utter = new SpeechSynthesisUtterance(data.translation);
-        utter.lang = /[\u4e00-\u9fa5]/.test(data.translation) ? 'zh-CN' : 'en-US';
-        speechSynthesis.speak(utter);
+          const utter = new SpeechSynthesisUtterance(data.translation);
+          utter.lang = /[\u4e00-\u9fa5]/.test(data.translation) ? 'zh-CN' : 'en-US';
+          speechSynthesis.speak(utter);
+        } catch (err) {
+          translated.innerText = '⚠️ 请求失败，请重试';
+        }
+
+        // 重置按钮行为
+        recordBtn.innerText = '🎙 重新录音';
+        recordBtn.onclick = () => location.reload();
+        stream.getTracks().forEach(track => track.stop());
       };
 
       mediaRecorder.start();
-      status.innerText = '🎙 录音中...请开始说话';
+      status.innerText = '🎙 录音中... 请说话';
       recordBtn.innerText = '🛑 停止录音';
 
+      // 动态绑定停止逻辑
       recordBtn.onclick = () => {
         mediaRecorder.stop();
-        stream.getTracks().forEach(track => track.stop());
         status.innerText = '⏳ 处理中...';
-        recordBtn.innerText = '🎙 重新录音';
-        recordBtn.onclick = recordBtn.onclick = () => location.reload(); // 重新绑定
+        recordBtn.disabled = true;
       };
     };
   </script>
