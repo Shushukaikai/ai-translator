@@ -3,11 +3,11 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>快快翻译</title>
+  <title>快快1翻译</title>
   <script src="https://cdn.tailwindcss.com"></script>
 </head>
 <body class="bg-white text-gray-900 p-6 font-sans">
-  <h1 class="text-3xl font-bold text-blue-700 mb-4">🎤 快快翻译</h1>
+  <h1 class="text-3xl font-bold text-blue-700 mb-4">🎤 快快1翻译</h1>
   <button id="recordBtn" class="bg-green-600 text-white px-6 py-2 rounded hover:bg-green-700">🎙️ 开始录音</button>
 
   <div class="mt-6">
@@ -20,7 +20,7 @@
     const speechText = document.getElementById("speechText");
     const translatedText = document.getElementById("translatedText");
 
-    const DEEPSEEK_API_KEY = "sk-56a600d343c9459aa330650d85891179";  // 你自己的 key
+    const DEEPSEEK_API_KEY = "sk-56a600d343c9459aa330650d85891179";
 
     let mediaRecorder;
     let chunks = [];
@@ -39,7 +39,7 @@
         speechText.innerText = "";
 
         try {
-          // 语音识别 - DeepSeek Whisper
+          // Step 1: Whisper 语音识别
           const whisperRes = await fetch("https://api.deepseek.com/v1/audio/transcriptions", {
             method: "POST",
             headers: {
@@ -54,10 +54,14 @@
 
           const whisperData = await whisperRes.json();
           const recognizedText = whisperData.text || "";
-
           speechText.innerText = recognizedText;
 
-          // 翻译 - DeepSeek Chat
+          if (!recognizedText) {
+            translatedText.innerText = "⚠️ 没有识别到语音内容";
+            return;
+          }
+
+          // Step 2: 翻译调用
           const translateRes = await fetch("https://api.deepseek.com/v1/chat/completions", {
             method: "POST",
             headers: {
@@ -69,7 +73,7 @@
               messages: [
                 {
                   role: "system",
-                  content: "你是一个中英互译助手。用户说中文时请翻译成英文，说英文时请翻译成中文，只返回翻译后的文本。"
+                  content: "你是一个中英互译助手。用户说中文时请翻译成英文，说英文时请翻译成中文，只返回翻译后的内容。"
                 },
                 {
                   role: "user",
