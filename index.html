@@ -42,23 +42,22 @@
       speechText.innerText = text;
 
       // 翻译（调用 DeepSeek 或其他翻译服务）
-      const res = await fetch("https://api.deeplx.org/translate", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          text: text,
-          source_lang: "auto",
-          target_lang: /[\u4e00-\u9fa5]/.test(text) ? "EN" : "ZH"
-        })
-      });
-
-      const data = await res.json();
-      translatedText.innerText = data.data;
-    };
-
-    recognition.onerror = (e) => {
-      speechText.innerText = "❌ 识别失败：" + e.error;
-    };
+      try {
+  const res = await fetch("https://libretranslate.de/translate", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      q: text,
+      source: lang === "ZH" ? "zh" : "en",
+      target: lang === "ZH" ? "en" : "zh",
+      format: "text"
+    })
+  });
+  const data = await res.json();
+  translatedText.innerText = data.translatedText || "翻译失败";
+} catch {
+  translatedText.innerText = "⚠️ 翻译失败";
+}
   </script>
 </body>
 </html>
