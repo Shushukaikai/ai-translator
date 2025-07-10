@@ -3,15 +3,20 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>AI语音翻译助手（Whisper版）</title>
+  <title>AI语音翻译助手（Whisper优化版）</title>
   <script src="https://cdn.tailwindcss.com"></script>
 </head>
 <body class="bg-gray-100 p-6">
-  <h1 class="text-2xl font-bold mb-4">🎤 AI语音翻译助手（Whisper版）</h1>
+  <h1 class="text-2xl font-bold mb-4">🎤 AI语音翻译助手（Whisper优化版）</h1>
   <button id="recordBtn" class="bg-blue-500 text-white px-4 py-2 rounded mb-4">🎙 开始录音</button>
   <div id="status" class="text-sm text-gray-500 mb-2">等待录音中...</div>
-  <div id="result" class="text-base font-semibold mb-2"></div>
-  <div id="translated" class="text-green-600 font-bold text-lg mb-4"></div>
+
+  <div class="mb-2 text-base font-semibold text-gray-800">
+    <span class="font-bold text-gray-600">你说的是：</span><span id="spokenText">（尚未识别）</span>
+  </div>
+  <div class="mb-4 text-lg font-bold text-blue-700">
+    <span class="font-bold text-gray-600">翻译结果：</span><span id="translatedText">（尚未翻译）</span>
+  </div>
 
   <script>
     let mediaRecorder;
@@ -19,8 +24,8 @@
 
     const recordBtn = document.getElementById('recordBtn');
     const status = document.getElementById('status');
-    const result = document.getElementById('result');
-    const translated = document.getElementById('translated');
+    const spokenText = document.getElementById('spokenText');
+    const translatedText = document.getElementById('translatedText');
 
     recordBtn.onclick = async () => {
       if (!navigator.mediaDevices) {
@@ -38,6 +43,9 @@
         const blob = new Blob(audioChunks, { type: 'audio/webm' });
         status.innerText = '上传中...';
 
+        spokenText.innerText = '识别中...';
+        translatedText.innerText = '翻译处理中...';
+
         const formData = new FormData();
         formData.append('file', blob, 'audio.webm');
 
@@ -48,14 +56,14 @@
           });
 
           const data = await res.json();
-          result.innerText = '你说的是：' + data.text;
-          translated.innerText = '翻译：' + data.translation;
+          spokenText.innerText = data.text || '（未识别到语音）';
+          translatedText.innerText = data.translation || '（翻译失败）';
 
           const utter = new SpeechSynthesisUtterance(data.translation);
           utter.lang = /[\u4e00-\u9fa5]/.test(data.translation) ? 'zh-CN' : 'en-US';
           speechSynthesis.speak(utter);
         } catch (err) {
-          translated.innerText = '⚠️ 请求失败，请重试';
+          translatedText.innerText = '⚠️ 翻译失败，请稍后重试';
         }
 
         // 重置按钮行为
