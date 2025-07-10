@@ -1,87 +1,63 @@
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="zh">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>AI语音翻译助手（Whisper优化版）</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>🎤 AI实时语音翻译</title>
   <script src="https://cdn.tailwindcss.com"></script>
 </head>
 <body class="bg-gray-100 p-6">
-  <h1 class="text-2xl font-bold mb-4">🎤 AI语音翻译助手（Whisper优化版）</h1>
-  <button id="recordBtn" class="bg-blue-500 text-white px-4 py-2 rounded mb-4">🎙 开始录音</button>
-  <div id="status" class="text-sm text-gray-500 mb-2">等待录音中...</div>
+  <h1 class="text-2xl font-bold mb-4">🎤 AI实时语音翻译助手</h1>
 
-  <div class="mb-2 text-base font-semibold text-gray-800">
-    <span class="font-bold text-gray-600">你说的是：</span><span id="spokenText">（尚未识别）</span>
-  </div>
-  <div class="mb-4 text-lg font-bold text-blue-700">
-    <span class="font-bold text-gray-600">翻译结果：</span><span id="translatedText">（尚未翻译）</span>
-  </div>
+  <button id="startBtn" class="bg-green-600 text-white px-4 py-2 rounded mb-4">
+    🎙 开始说话
+  </button>
+
+  <p><strong>你说的是：</strong> <span id="speechText" class="text-gray-800"></span></p>
+  <p><strong>翻译结果：</strong> <span id="translatedText" class="text-blue-800 font-bold"></span></p>
 
   <script>
-    let mediaRecorder;
-    let audioChunks = [];
+    const speechText = document.getElementById("speechText");
+    const translatedText = document.getElementById("translatedText");
+    const startBtn = document.getElementById("startBtn");
 
-    const recordBtn = document.getElementById('recordBtn');
-    const status = document.getElementById('status');
-    const spokenText = document.getElementById('spokenText');
-    const translatedText = document.getElementById('translatedText');
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      alert("抱歉，您的浏览器不支持语音识别。请使用 Chrome 浏览器。");
+    }
 
-    recordBtn.onclick = async () => {
-      if (!navigator.mediaDevices) {
-        alert("你的浏览器不支持录音");
-        return;
-      }
+    const recognition = new SpeechRecognition();
+    recognition.lang = "zh-CN"; // 或设为 "en-US"，或让浏览器自动识别
+    recognition.continuous = false;
+    recognition.interimResults = false;
 
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      mediaRecorder = new MediaRecorder(stream);
-      audioChunks = [];
+    startBtn.onclick = () => {
+      speechText.innerText = "🎙 正在聆听...";
+      translatedText.innerText = "";
+      recognition.start();
+    };
 
-      mediaRecorder.ondataavailable = e => audioChunks.push(e.data);
+    recognition.onresult = async (event) => {
+      const text = event.results[0][0].transcript;
+      speechText.innerText = text;
 
-      mediaRecorder.onstop = async () => {
-        const blob = new Blob(audioChunks, { type: 'audio/webm' });
-        status.innerText = '上传中...';
+      // 翻译（调用 DeepSeek 或其他翻译服务）
+      const res = await fetch("https://api.deeplx.org/translate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          text: text,
+          source_lang: "auto",
+          target_lang: /[\u4e00-\u9fa5]/.test(text) ? "EN" : "ZH"
+        })
+      });
 
-        spokenText.innerText = '识别中...';
-        translatedText.innerText = '翻译处理中...';
+      const data = await res.json();
+      translatedText.innerText = data.data;
+    };
 
-        const formData = new FormData();
-        formData.append('file', blob, 'audio.webm');
-
-        try {
-          const res = await fetch('https://whisper-deepseek-demo.vercel.app/api/whisper', {
-            method: 'POST',
-            body: formData
-          });
-
-          const data = await res.json();
-          spokenText.innerText = data.text || '（未识别到语音）';
-          translatedText.innerText = data.translation || '（翻译失败）';
-
-          const utter = new SpeechSynthesisUtterance(data.translation);
-          utter.lang = /[\u4e00-\u9fa5]/.test(data.translation) ? 'zh-CN' : 'en-US';
-          speechSynthesis.speak(utter);
-        } catch (err) {
-          translatedText.innerText = '⚠️ 翻译失败，请稍后重试';
-        }
-
-        // 重置按钮行为
-        recordBtn.innerText = '🎙 重新录音';
-        recordBtn.onclick = () => location.reload();
-        stream.getTracks().forEach(track => track.stop());
-      };
-
-      mediaRecorder.start();
-      status.innerText = '🎙 录音中... 请说话';
-      recordBtn.innerText = '🛑 停止录音';
-
-      // 动态绑定停止逻辑
-      recordBtn.onclick = () => {
-        mediaRecorder.stop();
-        status.innerText = '⏳ 处理中...';
-        recordBtn.disabled = true;
-      };
+    recognition.onerror = (e) => {
+      speechText.innerText = "❌ 识别失败：" + e.error;
     };
   </script>
 </body>
