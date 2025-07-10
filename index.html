@@ -3,61 +3,79 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>🎤 AI实时语音翻译</title>
+  <title>🎙 AI英汉语音翻译</title>
   <script src="https://cdn.tailwindcss.com"></script>
 </head>
 <body class="bg-gray-100 p-6">
-  <h1 class="text-2xl font-bold mb-4">🎤 AI实时语音翻译助手</h1>
+  <h1 class="text-2xl font-bold mb-4">🎙 AI 英汉翻译（支持 iPad）</h1>
 
-  <button id="startBtn" class="bg-green-600 text-white px-4 py-2 rounded mb-4">
-    🎙 开始说话
+  <button id="recordBtn" class="bg-blue-600 text-white px-4 py-2 rounded mb-4">
+    ⏺️ 开始录音
   </button>
 
-  <p><strong>你说的是：</strong> <span id="speechText" class="text-gray-800"></span></p>
-  <p><strong>翻译结果：</strong> <span id="translatedText" class="text-blue-800 font-bold"></span></p>
+  <p><strong>原始语音识别：</strong> <span id="speechText" class="text-gray-800">（等待上传）</span></p>
+  <p><strong>翻译结果：</strong> <span id="translatedText" class="text-blue-800 font-bold">（等待识别）</span></p>
 
   <script>
+    let mediaRecorder, audioChunks = [];
+    const recordBtn = document.getElementById("recordBtn");
     const speechText = document.getElementById("speechText");
     const translatedText = document.getElementById("translatedText");
-    const startBtn = document.getElementById("startBtn");
 
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SpeechRecognition) {
-      alert("抱歉，您的浏览器不支持语音识别。请使用 Chrome 浏览器。");
-    }
+    recordBtn.onclick = async () => {
+      if (mediaRecorder && mediaRecorder.state === "recording") {
+        mediaRecorder.stop();
+        recordBtn.innerText = "⏺️ 开始录音";
+        return;
+      }
 
-    const recognition = new SpeechRecognition();
-    recognition.lang = "zh-CN"; // 或设为 "en-US"，或让浏览器自动识别
-    recognition.continuous = false;
-    recognition.interimResults = false;
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      mediaRecorder = new MediaRecorder(stream);
+      audioChunks = [];
 
-    startBtn.onclick = () => {
-      speechText.innerText = "🎙 正在聆听...";
-      translatedText.innerText = "";
-      recognition.start();
+      mediaRecorder.ondataavailable = e => audioChunks.push(e.data);
+      mediaRecorder.onstop = async () => {
+        const blob = new Blob(audioChunks, { type: "audio/webm" });
+        const formData = new FormData();
+        formData.append("audio", blob, "recording.webm");
+
+        speechText.innerText = "⏳ 正在识别中...";
+        translatedText.innerText = "（等待翻译）";
+
+        try {
+          // 1. 调用测试 Whisper API（无需 Key）
+          const whisperRes = await fetch("https://deepseek-whisper-api.vercel.app/api/whisper", {
+            method: "POST",
+            body: formData
+          });
+          const whisperData = await whisperRes.json();
+          const originalText = whisperData.text || "(识别失败)";
+          speechText.innerText = originalText;
+
+          // 2. 调用 LibreTranslate 翻译
+          const lang = /[\u4e00-\u9fa5]/.test(originalText) ? "en" : "zh";
+          const transRes = await fetch("https://libretranslate.de/translate", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              q: originalText,
+              source: "auto",
+              target: lang,
+              format: "text"
+            })
+          });
+          const transData = await transRes.json();
+          translatedText.innerText = transData.translatedText || "⚠️ 翻译失败";
+
+        } catch (e) {
+          speechText.innerText = "❌ 语音识别失败";
+          translatedText.innerText = "⚠️ 翻译失败";
+        }
+      };
+
+      mediaRecorder.start();
+      recordBtn.innerText = "🛑 停止录音";
     };
-
-    recognition.onresult = async (event) => {
-      const text = event.results[0][0].transcript;
-      speechText.innerText = text;
-
-      // 翻译（调用 DeepSeek 或其他翻译服务）
-      try {
-  const res = await fetch("https://libretranslate.de/translate", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      q: text,
-      source: lang === "ZH" ? "zh" : "en",
-      target: lang === "ZH" ? "en" : "zh",
-      format: "text"
-    })
-  });
-  const data = await res.json();
-  translatedText.innerText = data.translatedText || "翻译失败";
-} catch {
-  translatedText.innerText = "⚠️ 翻译失败";
-}
   </script>
 </body>
 </html>
