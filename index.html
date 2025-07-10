@@ -1,13 +1,14 @@
 <!DOCTYPE html>
 <html lang="zh">
 <head>
-  <meta charset="UTF-8">
-  <title>🎤 AI语音翻译助手</title>
+  <meta charset="UTF-8" />
+  <title>🎤 AI 语音快快翻译助手</title>
   <script src="https://cdn.tailwindcss.com"></script>
 </head>
 <body class="bg-gray-100 text-gray-900 p-6">
-  <h1 class="text-2xl font-bold mb-4">🎤 AI语音翻译助手</h1>
-  <button id="recordBtn" class="bg-blue-600 text-white px-4 py-2 rounded">🎙 开始说话</button>
+  <h1 class="text-2xl font-bold mb-4">🎤 AI 语音快快翻译助手</h1>
+  <button id="recordBtn" class="bg-blue-600 text-white px-4 py-2 rounded">开始录音</button>
+
   <p class="mt-4"><strong>识别内容：</strong> <span id="speechText" class="text-blue-800"></span></p>
   <p class="mt-2"><strong>翻译结果：</strong> <span id="translatedText" class="text-green-800 font-bold"></span></p>
 
@@ -15,6 +16,8 @@
     const recordBtn = document.getElementById("recordBtn");
     const speechText = document.getElementById("speechText");
     const translatedText = document.getElementById("translatedText");
+
+    const DEEPSEEK_API_KEY = "sk-56a600d343c9459aa330650d85891179";
 
     let mediaRecorder;
     let chunks = [];
@@ -27,37 +30,76 @@
       mediaRecorder.ondataavailable = e => chunks.push(e.data);
       mediaRecorder.onstop = async () => {
         const blob = new Blob(chunks, { type: "audio/webm" });
-        const formData = new FormData();
-        formData.append("audio", blob);
+        const base64Audio = await blobToBase64(blob);
 
         translatedText.innerText = "识别中...";
         speechText.innerText = "";
 
         try {
-          const res = await fetch("https://ai-translator-proxy.vercel.app/api/whisper_baidu", {
+          // ① Whisper识别
+          const whisperRes = await fetch("https://api.deepseek.com/v1/audio/transcriptions", {
             method: "POST",
-            body: formData
+            headers: {
+              "Authorization": `Bearer ${DEEPSEEK_API_KEY}`,
+              "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+              model: "whisper-1",
+              language: "zh", // 可留空，自动识别
+              audio: base64Audio
+            })
           });
-          const data = await res.json();
 
-          if (data.error) {
-            translatedText.innerText = "⚠️ 出错：" + data.error;
-          } else {
-            speechText.innerText = data.recognizedText;
-            translatedText.innerText = data.translatedText;
-          }
+          const whisperData = await whisperRes.json();
+          const recognizedText = whisperData.text || "";
+
+          speechText.innerText = recognizedText;
+
+          // ② 翻译
+          const translateRes = await fetch("https://api.deepseek.com/v1/chat/completions", {
+            method: "POST",
+            headers: {
+              "Authorization": `Bearer ${DEEPSEEK_API_KEY}`,
+              "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+              model: "deepseek-chat",
+              messages: [
+                {
+                  role: "system",
+                  content: "你是一个中英互译助手。用户说中文时请翻译成英文，说英文时请翻译成中文，只返回翻译后的文本。"
+                },
+                {
+                  role: "user",
+                  content: recognizedText
+                }
+              ]
+            })
+          });
+
+          const result = await translateRes.json();
+          translatedText.innerText = result.choices?.[0]?.message?.content || "⚠️ 翻译失败";
         } catch (err) {
+          console.error(err);
           translatedText.innerText = "⚠️ 请求失败";
         }
       };
 
       mediaRecorder.start();
       recordBtn.innerText = "🎙 正在录音（3秒）";
-
       setTimeout(() => {
         mediaRecorder.stop();
-        recordBtn.innerText = "🎙 开始说话";
+        recordBtn.innerText = "开始录音";
       }, 3000);
+    }
+
+    function blobToBase64(blob) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(reader.result.split(',')[1]);
+        reader.onerror = reject;
+        reader.readAsDataURL(blob);
+      });
     }
 
     recordBtn.onclick = () => {
